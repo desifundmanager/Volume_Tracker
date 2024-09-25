@@ -3,54 +3,70 @@ import yfinance as yf
 import pandas as pd
 import datetime
 import pytz
-import traceback
+import hashlib
 
-# Initialize session state for storing symbols
+# Initialize session state
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
 if 'symbols' not in st.session_state:
     st.session_state.symbols = []
+
+# Dummy user database (replace with a more secure method in production)
+users = {
+    "user1": "password1",
+    "user2": "password2"
+}
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def login():
+    st.title("Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    
+    if st.button("Login"):
+        if username in users and hash_password(password) == hash_password(users[username]):
+            st.session_state.logged_in = True
+            st.success("Logged in successfully!")
+            st.rerun()
+        else:
+            st.error("Invalid username or password")
 
 # Analyze stock data
 @st.cache_data(ttl=3600)
 def analyze_stock(symbol):
-    try:
-        stock = yf.Ticker(symbol)
-        hist = stock.history(period="1y")
-        
-        if hist.empty:
-            st.warning(f"No data available for symbol: {symbol}")
-            return None
-        
-        hist['Avg_Volume'] = hist['Volume'].rolling(window=10).mean()
-        hist['Volume_Change'] = (hist['Volume'] - hist['Avg_Volume']) / hist['Avg_Volume'] * 100
-        hist['Daily_Change'] = hist['Close'].pct_change() * 100
-        
-        current_year = datetime.datetime.now(pytz.timezone('UTC')).year
-        ytd_start = datetime.datetime(current_year, 1, 1, tzinfo=pytz.timezone('UTC'))
-        ytd_start_price = hist.loc[hist.index >= ytd_start, 'Close'].iloc[0]
-        ytd_return = (hist['Close'].iloc[-1] - ytd_start_price) / ytd_start_price * 100
-        
-        latest = hist.iloc[-1]
-        
-        return {
-            'Symbol': symbol,
-            'Close': latest['Close'],
-            'Daily_Change': latest['Daily_Change'],
-            'YTD_Return': ytd_return,
-            'Volume': latest['Volume'],
-            'Avg_Volume': hist['Avg_Volume'].iloc[-1],
-            'Volume_Change': hist['Volume_Change'].iloc[-1],
-            'Date': latest.name.date(),
-        }
-    except Exception as e:
-        st.error(f"Error analyzing stock {symbol}: {str(e)}")
-        st.error(traceback.format_exc())
+    stock = yf.Ticker(symbol)
+    hist = stock.history(period="1y")
+    
+    if hist.empty:
         return None
+    
+    hist['Avg_Volume'] = hist['Volume'].rolling(window=10).mean()
+    hist['Volume_Change'] = (hist['Volume'] - hist['Avg_Volume']) / hist['Avg_Volume'] * 100
+    hist['Daily_Change'] = hist['Close'].pct_change() * 100
+    
+    current_year = datetime.datetime.now(pytz.timezone('UTC')).year
+    ytd_start = datetime.datetime(current_year, 1, 1, tzinfo=pytz.timezone('UTC'))
+    ytd_start_price = hist.loc[hist.index >= ytd_start, 'Close'].iloc[0]
+    ytd_return = (hist['Close'].iloc[-1] - ytd_start_price) / ytd_start_price * 100
+    
+    latest = hist.iloc[-1]
+    
+    return {
+        'Symbol': symbol,
+        'Close': latest['Close'],
+        'Daily_Change': latest['Daily_Change'],
+        'YTD_Return': ytd_return,
+        'Volume': latest['Volume'],
+        'Avg_Volume': hist['Avg_Volume'].iloc[-1],
+        'Volume_Change': hist['Volume_Change'].iloc[-1],
+        'Date': latest.name.date(),
+    }
 
 def run_volume_tracker():
     st.markdown('<p style="font-size: 30px;">Stock Volume Tracker</p>', unsafe_allow_html=True)
-
-    # Debug output
-    st.write("Debug: Application started")
 
     # Sidebar for adding and removing symbols
     with st.sidebar:
@@ -69,9 +85,6 @@ def run_volume_tracker():
                 st.session_state.symbols.remove(symbol_to_remove)
                 st.success(f"Removed {symbol_to_remove}")
 
-    # Debug output
-    st.write(f"Debug: Current symbols: {st.session_state.symbols}")
-
     # Update button
     if st.button('🔄 Update Data'):
         st.cache_data.clear()
@@ -79,15 +92,12 @@ def run_volume_tracker():
 
     # Main app logic
     if st.session_state.symbols:
-        st.write("Debug: Analyzing stocks...")
         with st.spinner('Analyzing stocks...'):
             results = []
             for symbol in st.session_state.symbols:
                 data = analyze_stock(symbol)
                 if data is not None:
                     results.append(data)
-
-        st.write(f"Debug: Analysis complete. Results: {len(results)} stocks")
 
         if results:
             df = pd.DataFrame(results)
@@ -130,12 +140,16 @@ def run_volume_tracker():
     else:
         st.info("No symbols added yet. Use the sidebar to add symbols to track.")
 
-    # Final debug output
-    st.write("Debug: Application completed")
+    # Logout button
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+
+def main():
+    if st.session_state.logged_in:
+        run_volume_tracker()
+    else:
+        login()
 
 if __name__ == "__main__":
-    try:
-        run_volume_tracker()
-    except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
-        st.error(traceback.format_exc())
+    main()
