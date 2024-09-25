@@ -14,7 +14,7 @@ if 'symbols' not in st.session_state:
 
 # Dummy user database (replace with a more secure method in production)
 users = {
-    "user1": "password1",
+    "pranav": "learntocode",
     "user2": "password2"
 }
 
