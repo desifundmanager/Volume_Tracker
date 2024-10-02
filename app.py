@@ -15,32 +15,15 @@ if 'logged_in' not in st.session_state:
 def init_db():
     conn = sqlite3.connect('stock_tracker.db')
     c = conn.cursor()
-    c.execute('DROP TABLE IF EXISTS users')
-    c.execute('DROP TABLE IF EXISTS user_symbols')
-    c.execute('''CREATE TABLE users
-                 (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
-    c.execute('''CREATE TABLE user_symbols
+    c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)')
+    c.execute('''CREATE TABLE IF NOT EXISTS user_symbols
                  (user_id INTEGER, symbol TEXT,
-                 FOREIGN KEY (user_id) REFERENCES users(id))''')
+                 FOREIGN KEY (user_id) REFERENCES users(id),
+                 UNIQUE(user_id, symbol))''')
     
-    # Add the single user
-    c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
+    # Add the single user if not exists
+    c.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)",
               ('pranav', hash_password('learntocode')))
-    
-    # Add the predefined symbols
-    user_id = c.lastrowid
-    symbols = [
-        'DCW.NS', 'SPICEJET.BO', 'STYRENIX.NS', 'PANACEABIO.NS', 'NPOWER.NS',
-        'TIRUMALCHM.NS', 'INDOSTAR.NS', 'INDIGOPNTS.NS', 'BEPL.NS', 'VINATIORGA.NS',
-        'NELCO.NS', 'DREAMFOLKS.NS', 'RAMCOCEM.NS', 'VEDL.NS', 'RKSWAMY.NS',
-        'PPLPHARMA.NS', 'SAIL.NS', 'DEEDEV.NS', 'INDA', 'SMIN',
-        'SHYAMMETL.NS', 'CORALFINAC.NS', 'TREJHARA.NS', 'RBA.NS', 'STEELCAS.BO',
-        'QUICKHEAL.NS', 'EICHERMOT.NS', 'PNBHOUSING.NS', 'JYOTISTRUC.NS', 'SHK.NS',
-        'BCONPRDTS.NS', 'IDEA.NS', 'ARVIND.NS', 'SEQUENT.NS', 'MANINDS.NS',
-        'WELCORP.NS', 'LINC.NS'
-    ]
-    for symbol in symbols:
-        c.execute("INSERT INTO user_symbols (user_id, symbol) VALUES (?, ?)", (user_id, symbol))
     
     conn.commit()
     conn.close()
@@ -65,6 +48,25 @@ def get_user_symbols(user_id):
     symbols = [row[0] for row in c.fetchall()]
     conn.close()
     return symbols
+
+def add_symbol(user_id, symbol):
+    conn = sqlite3.connect('stock_tracker.db')
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO user_symbols (user_id, symbol) VALUES (?, ?)", (user_id, symbol))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def remove_symbol(user_id, symbol):
+    conn = sqlite3.connect('stock_tracker.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM user_symbols WHERE user_id = ? AND symbol = ?", (user_id, symbol))
+    conn.commit()
+    conn.close()
 
 def login():
     st.title("Login")
@@ -113,6 +115,23 @@ def analyze_stock(symbol):
 
 def run_volume_tracker():
     st.markdown('<p style="font-size: 30px;">Stock Volume Tracker</p>', unsafe_allow_html=True)
+
+    # Sidebar for adding and removing symbols
+    with st.sidebar:
+        st.header("Manage Symbols")
+        new_symbol = st.text_input("Add new symbol").upper()
+        if st.button("Add Symbol") and new_symbol:
+            if add_symbol(st.session_state.user_id, new_symbol):
+                st.success(f"Added {new_symbol}")
+            else:
+                st.warning(f"{new_symbol} already exists")
+        
+        user_symbols = get_user_symbols(st.session_state.user_id)
+        if user_symbols:
+            symbol_to_remove = st.selectbox("Select symbol to remove", user_symbols)
+            if st.button("Remove Symbol"):
+                remove_symbol(st.session_state.user_id, symbol_to_remove)
+                st.success(f"Removed {symbol_to_remove}")
 
     # Update button
     if st.button('🔄 Update Data'):
@@ -168,7 +187,7 @@ def run_volume_tracker():
         else:
             st.warning("No valid data found for the given symbols.")
     else:
-        st.info("No symbols found in the database.")
+        st.info("No symbols added yet. Use the sidebar to add symbols to track.")
 
     # Logout button
     if st.sidebar.button("Logout"):
