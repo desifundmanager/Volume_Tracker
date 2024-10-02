@@ -25,7 +25,7 @@ def init_db():
     
     # Add the single user
     c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
-              ('pranav', hash_password('learn to code')))
+              ('pranav', hash_password('learntocode')))
     
     # Add the predefined symbols
     user_id = c.lastrowid
