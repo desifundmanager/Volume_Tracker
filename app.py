@@ -159,8 +159,11 @@ def run_volume_tracker():
             df['Volume'] = df['Volume'].astype(int)
             df['Volume_Change'] = df['Volume_Change'].round(2)
 
+            # Combine Close and Daily_Change into a single Price column
+            df['Price'] = df.apply(lambda row: f"{row['Close']:.2f} ({row['Daily_Change']:+.2f}%)", axis=1)
+
             # Reorder and select columns for display
-            column_order = ['Symbol', 'Close', 'Daily_Change', 'Volume_Change', 'Volume', 'Avg_Volume', 'YTD_Return', 'Date']
+            column_order = ['Symbol', 'Price', 'Volume_Change', 'Volume', 'Avg_Volume', 'YTD_Return', 'Date']
             df = df[column_order]
 
             # Display statistics at the top
@@ -174,14 +177,12 @@ def run_volume_tracker():
 
             # Display the dataframe with improved formatting
             st.dataframe(df.style.format({
-                'Close': '${:.2f}',
-                'Daily_Change': '{:+.2f}%',
                 'Volume': '{:,.0f}',
                 'Avg_Volume': '{:,.0f}',
                 'Volume_Change': '{:+.2f}%',
                 'YTD_Return': '{:+.2f}%'
-            }).applymap(lambda x: 'color: green' if x > 0 else 'color: red' if x < 0 else '',
-                        subset=['Daily_Change', 'Volume_Change', 'YTD_Return'])
+            }).applymap(lambda x: 'color: green' if '+' in str(x) else 'color: red' if '-' in str(x) else '',
+                        subset=['Price', 'Volume_Change', 'YTD_Return'])
             .set_properties(**{'text-align': 'right'})
             .set_table_styles([
                 {'selector': 'th', 'props': [('text-align', 'center')]},
